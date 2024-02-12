@@ -4,6 +4,8 @@
 * Main differences with unittest at a glance
 ** Error messages
 unittest requires specific ~assert~ methods like ~self.assertEqual~ to provide good error feedback. With ~pytest~, normal ~assert~ statements return good error messages. This makes code more readable and less verbose.
+
+In the example below, the first test uses unittest and a plain ~assert~ statement. The error message is not helpful, as it doesn't indicate what exactly went wrong. The second test uses ~unittest~ and ~self.assertEqual~. The error message is better, as it shows the expected and actual values. The third test uses ~pytest~ and a plain ~assert~ statement. The error message is as good as the second test, but the code is more concise.
 #+begin_src python
 # code/test_unittest_assert.py
 class TestUnittestAssert(unittest.TestCase):
@@ -29,9 +31,7 @@ if __name__ == "__main__":
     unittest.main()
 #+end_src
 
-#+begin_comment
-Pytest achieves this by changing how the ~assert~ statement works. Therefore, even if you use unittest style tests, you will benefit from the nice error messages when using ~assert~ as long as you use ~pytest~ as the test runner.
-#+end_comment
+=Pytest achieves this by changing how the ~assert~ statement works. Therefore, even if you use unittest style tests, you will benefit from the nice error messages when using ~assert~ as long as you use ~pytest~ as the test runner.=
 ** Test classes
 In ~unittest~, test classes must inherit from ~unittest.TestCase~. In ~pytest~, they don't need to inherit from anything. You can even write tests as standalone functions, but I recommend to still group them in classes (this is explained in a later section).
 * Fixtures
