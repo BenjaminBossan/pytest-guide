@@ -1,0 +1,57 @@
+#+title: Pytest
+
+* Introduction
+* Main differences with unittest at a glance
+** Error messages
+unittest requires specific ~assert~ methods like ~self.assertEqual~ to provide good error feedback. With ~pytest~, normal ~assert~ statements return good error messages. This makes code more readable and less verbose.
+#+begin_src python
+# code/test_unittest_assert.py
+class TestUnittestAssert(unittest.TestCase):
+    def test_upper(self):
+        assert "foo".upper() == "BAR"
+# AssertionError
+
+class TestUnittestAssertMethod(unittest.TestCase):
+    def test_upper(self):
+        self.assertEqual("foo".upper(), "BAR")
+# E       AssertionError: 'FOO' != 'BAR'
+# E       - FOO
+# E       + BAR
+
+class TestPytestAssert:
+    def test_upper(self):
+        assert "foo".upper() == "BAR"
+# E       AssertionError: 'FOO' != 'BAR'
+# E       - FOO
+# E       + BAR
+
+if __name__ == "__main__":
+    unittest.main()
+#+end_src
+
+#+begin_comment
+Pytest achieves this by changing how the ~assert~ statement works. Therefore, even if you use unittest style tests, you will benefit from the nice error messages when using ~assert~ as long as you use ~pytest~ as the test runner.
+#+end_comment
+** Test classes
+In ~unittest~, test classes must inherit from ~unittest.TestCase~. In ~pytest~, they don't need to inherit from anything. You can even write tests as standalone functions, but I recommend to still group them in classes (this is explained in a later section).
+* Fixtures
+* Builtin fixtures
+[[https://docs.pytest.org/en/latest/reference/fixtures.html][docs]]
+** ~caplog~
+** ~capsys~
+** ~recwar~
+** ~tmp_path~
+* Testing for exceptions
+* Parametrization
+** asdf
+[[https://docs.pytest.org/en/latest/how-to/parametrize.html][docs]]
+* Markers
+** ~xfail~
+** skipping
+** Slow marker
+** Custom markers
+[[https://docs.pytest.org/en/latest/how-to/mark.html][docs]]
+* Test organization
+** Group tests in classes
+* Pytest test runner
+* Plugins
