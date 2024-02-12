@@ -1,6 +1,9 @@
-#+title: Pytest
+#+title: Pytest Guide
 
 * Introduction
+The purpose of this guide is to help you get started with ~pytest~ when you are already familiar with ~unittest~. We will learn about the main differences between the two libraries, what the main features of ~pytest~ are, and how to use them well.
+
+This guide is not a comprehensive tutorial on ~pytest~. For this, please refer to the [[https://docs.pytest.org/][official documenation]].
 * Main differences with unittest at a glance
 ** Error messages
 unittest requires specific ~assert~ methods like ~self.assertEqual~ to provide good error feedback. With ~pytest~, normal ~assert~ statements return good error messages. This makes code more readable and less verbose.
@@ -31,9 +34,31 @@ if __name__ == "__main__":
     unittest.main()
 #+end_src
 
-=Pytest achieves this by changing how the ~assert~ statement works. Therefore, even if you use unittest style tests, you will benefit from the nice error messages when using ~assert~ as long as you use ~pytest~ as the test runner.=
+/Pytest achieves this by changing how the ~assert~ statement works. Therefore, even if you use unittest style tests, you will benefit from the nice error messages when using ~assert~ as long as you use ~pytest~ as the test runner./
 ** Test classes
 In ~unittest~, test classes must inherit from ~unittest.TestCase~. In ~pytest~, they don't need to inherit from anything. You can even write tests as standalone functions, but I recommend to still group them in classes (this is explained in a later section).
+#+begin_src python
+# code/test_unittest_class.py
+
+# unittest style
+class TestLists(unittest.TestCase):
+    def test_contains(self):
+        self.assertIn(2, [1, 2, 3])
+
+    def test_append(self):
+        lst = [1, 2, 3]
+        lst.append(4)
+        self.assertEqual(lst, [1, 2, 3, 4])
+
+# pytest style using standalone functions
+def test_contains():
+    assert 2 in [1, 2, 3]
+
+def test_append():
+    lst = [1, 2, 3]
+    lst.append(4)
+    assert lst == [1, 2, 3, 4]
+#+end_src
 * Fixtures
 * Builtin fixtures
 [[https://docs.pytest.org/en/latest/reference/fixtures.html][docs]]
@@ -55,3 +80,5 @@ In ~unittest~, test classes must inherit from ~unittest.TestCase~. In ~pytest~, 
 ** Group tests in classes
 * Pytest test runner
 * Plugins
+* PyTorch
+/special considerations for PyTorch/
