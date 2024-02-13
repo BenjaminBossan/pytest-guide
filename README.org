@@ -80,7 +80,6 @@ class TestBloomzUnittest(unittest.TestCase):
     def test_num_layers(self):
         self.assertEqual(len(self.model.transformer.h), 24)
 
-
 class TestBloomzPytest:
     @pytest.fixture
     def model(self):
@@ -334,7 +333,7 @@ The syntax for ~@pytest.mark.parametrize~ is a bit unusual. As a first argument,
 class TestModel:
     @pytest.mark.parametrize("model_name", ["bigscience/bloomz-560m", "gpt2"])
     def test_forward(self, model_name):
-        # this test runs once for twice, once for each model
+        # this test runs twice, once for each model
         model = AutoModelForCausalLM.from_pretrained(model_name)
         x = torch.zeros(1, 10, dtype=torch.long)
         model(x)
@@ -360,7 +359,7 @@ class TestModel:
     @pytest.mark.parametrize("model_name", ["bigscience/bloomz-560m", "gpt2"])
     @pytest.mark.parametrize("method", ["forward", "generate"])
     def test_has_method(self, model_name, method):
-        # this test runse four times, once for each model and method
+        # this test runs four times, once for each model and method
         model = AutoModelForCausalLM.from_pretrained(model_name)
         assert hasattr(model, method)
 #+end_src
