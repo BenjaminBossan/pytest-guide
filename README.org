@@ -273,6 +273,7 @@ def test_print(capsys):
     captured = capsys.readouterr()
     assert captured.out == "This is printed to stdout\n"
     assert captured.err == "This is printed to stderr\n"
+#+end_src
 ** Capturing warnings: ~recwar~
 If your code emits warnings, use the [[https://docs.pytest.org/en/latest/reference/reference.html#std-fixture-recwarn][recwarn]] fixture to capture them. This fixture captures all warnings and makes them available to the test function.
 #+begin_src python
@@ -285,6 +286,7 @@ def test_warning(recwarn):
     warning.warn("This is another warning", FutureWarning)
     assert len(recwarn) == 2
     assert recwarn[1].category == FutureWarning
+#+end_src
 ** Temporary files: ~tmp_path~
 When working with temporary files, it is best to use the [[https://docs.pytest.org/en/latest/how-to/tmp_path.html#tmp-path][tmp_path]] fixture. This fixture creates a temporary directory and returns a ~pathlib.Path~ object pointing to it. The temporary directory is automatically cleaned up when the test finishes, only leaving the last 3 temporary directories in case you want to inspect them.
 #+begin_src python
