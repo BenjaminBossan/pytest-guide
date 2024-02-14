@@ -518,10 +518,70 @@ Of course, also add an entry to ~pyproject.toml~ as explained earlier. With this
 
 *Note*: When adding such a marker, ensure that the new flag is added to the CI scripts as well, or else these tests will be skipped on CI.
 * Pytest test runner
+** Introduction
+We're already using ~pytest~ as a test runner, since it works with ~unittest~ and has a couple of useful features. Still, we'll highlight a few features below that are useful to know about.
+
+With all the features explained in the following section, we assume that ~pytest~ is called from the command line. If you're using an editor or IDE to run your tests, check the available options there to select a subset of tests. Probably, everything that is described below can also be achieved from the editor or IDE, possibly requiring a plugin or extension.
+** Selectively running tests
+Our test suites are often very large and can take a lot of time to finish. Therefore, we might tend to not running the tests at all on our development machines and instead rely solely on CI. This, however, leads to a slow feedback loop. It is thus important to be able to run only a subset of tests. ~pytest~ has a couple of options to achieve this.
+
+The most common way to run only a subset of tests is to specify the path to the test file or directory. For example, ~pytest code/test_parametrize.py~ will run only the tests in the file ~test_parametrize.py~. You can also specify a directory, in which case all tests in the directory and its subdirectories will be run.
+
+Another common way to run only a subset of tests is to use the ~-k~ option. This option takes a string that is matched against the test names. Only the tests whose names match the string will be run. For example, ~pytest code/ -k forward~ will run only the tests whose names contain the substring "forward". The argument passed to ~-k~ can contain logical operators to refine the filter even more. For instance, run ~pytest code/ -k "TestModel and not layers"~ to run only the tests whose names contain "TestModel" (which is the class name in this case) but not "layers" (which is the method name in this case).
+
+When you're working on a test and you want to run only the tests that failed last time, you can use the ~--lf~ option. This can be especially useful when the tests are slow and you want to skip running the tests that would pass anyway.
+
+If these options are not enough to filter the specific tests you want to run, you should consider adding a marker, as explained in an earlier section. This allows you to mark arbitrary tests and to run only those by invoking ~pytest code/ -m <MARKER-NAME>~.
+** Early exit
+When running tests, it is often useful to stop the test run as soon as the first test fails. This can be achieved by passing the ~-x~ option to ~pytest~. For example, running ~pytest code/test_unittest_assert.py -x~ will stop the test run as soon as the first test fails. This is also useful when tests take some time to finish.
+** Dropping into the debugger
+By calling ~pytest~ with the ~--pdb~ option, you can drop into the debugger when a test fails. This is useful when you want to inspect the state of the program at that stage. For example, running ~pytest code/test_unittest_assert.py --pdb~ will drop into the debugger when a test fails. As usual, use the normal debugger commands like ~n~ to step to the next line, ~c~ to continue, ~l~ to list the code, etc.
+
+*Tip*: When using the ~--pdb~ option, it is often useful to also pass the ~-x~ option to stop the test run as soon as the first test fails. Otherwise, if 100 tests fail, you might get stuck in the debugger for a long time.
+** More verbose output
+By default, ~pytest~ only prints the names of the tests that fail. If you want to see more details, pass the ~-v~ flag to make the output more verbose.
+
+If you want to see the print output of the tests that pass, you can pass the ~-s~ flag. Otherwise, everything that is printed to stdout and stderr is captured and only shown when the test fails.
+
+To see which tests were slowest, pass the ~--durations <N>~ option, where ~N~ is a number. This will print the ~N~ slowest tests at the end of the test run. This can be useful to identify slow tests and to optimize them.
 * Plugins
+** Test coverage
+To ensure that as much code as possible is covered by tests, take a look at [[https://pypi.org/project/pytest-cov/][pytest-cov]]. This plugin will record the line coverage of the tests and print a report at the end, e.g. something like this:
+#+begin_src text
+Name                                                  Stmts   Miss  Cover   Missing
+-----------------------------------------------------------------------------------
+src/peft/__init__.py                                      8      0   100%
+src/peft/auto.py                                         68     31    54%   52, 72-126
+src/peft/config.py                                      101     56    45%   47, 60-80, 95-118, 131-151, 162-165, 169-181, 189-206, 218, 270
+src/peft/helpers.py                                      28     28     0%   1-113
+#+end_src
+This way, it is easy to identify which parts of the code base are covered by tests and which parts aren't. Of course, trying to achieve 100% coverage is not useful most of the time and when you're running only a subset of tests, as described in the previous section, the coverage report will only show the coverage of the tests that were run. Still, this is useful to have, especially when new features are being added. Checking the coverage report, we can ensure that the new code is covered by tests.
+
+When it comes to configuration, consider adding this to your ~pyproject.toml~:
+#+begin_src toml
+[tool.pytest.ini_options]
+addopts = "--cov=src/<package-name> --cov-report=term-missing"
+#+end_src
+** Pretty summary
+This is just a small cosmetic addition, but by installing [[https://pypi.org/project/pytest-pretty/][pytest-pretty]], you will automatically get a nice summary of the test run at the end. This can be useful to quickly see how many tests passed, failed, and were skipped. Here is an example output:
+#+begin_src text
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃  File                          ┃  Function                             ┃  Function Line  ┃  Error Line  ┃  Error           ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│  code/test_unittest_assert.py  │  TestUnittestAssert.test_upper        │  6              │  7           │  AssertionError  │
+│  code/test_unittest_assert.py  │  TestUnittestAssertMethod.test_upper  │  11             │  12          │  AssertionError  │
+│  code/test_unittest_assert.py  │  TestPytestAssert.test_upper          │  16             │  17          │  AssertionError  │
+└────────────────────────────────┴───────────────────────────────────────┴─────────────────┴──────────────┴──────────────────┘
+#+end_src
+** Running tests in parallel
+When you have a large test suite, it can be useful to run the tests in parallel to speed up the test run. This requires the [[https://pypi.org/project/pytest-xdist/][pytest-xdist]] plugin. To install it, run ~pip install pytest-xdist~. Then, you can run ~pytest code/ -n <N>~, where ~N~ is the number of workers. This will run the tests in ~N~ parallel processes.
 * PyTorch
 /special considerations for PyTorch/
 * Recommended practices
 ** Group tests in classes
 ** Documentation
 ** Test only one thing at a time
+** What to test -- and what not to test
+** Tips for speeding up the tests
+- Use appropriately scoped fixtures to avoid code duplication
+- Avoid expensive operations in the module root code, like importing slow libraries that are only used by a few tests. Instead, put them inside of fixtures. That way, they are only imported when the fixture is actually used.
