@@ -93,6 +93,8 @@ class TestBloomzPytest:
         assert len(model.transformer.h) == 24
 #+end_src
 As you can see, the ~model~ fixture is automatically passed to the test function because the argument name matches the name of the fixture. This is how ~pytest~ fixtures work. This can be done with as many fixtures as you want.
+
+*Note*: It is not possible to combine fixtures with ~unittest.TestCase~. Therefore, if you want to use fixtures, use a normal class or standalone functions.
 ** Setup and teardown
 In ~unittest~, you need to define ~setUp~ and ~tearDown~ methods in a test class. These methods are called before and after each test method, respectively. In ~pytest~, setup and teardown can be implemented in a fixture by using the ~yield~ statement. The code before the ~yield~ statement is the setup code, and the code after the ~yield~ statement is the teardown code.
 #+begin_src python
@@ -273,19 +275,6 @@ def test_print(capsys):
     assert captured.out == "This is printed to stdout\n"
     assert captured.err == "This is printed to stderr\n"
 #+end_src
-** Capturing warnings: ~recwar~
-If your code emits warnings, use the [[https://docs.pytest.org/en/latest/reference/reference.html#std-fixture-recwarn][recwarn]] fixture to capture them. This fixture captures all warnings and makes them available to the test function.
-#+begin_src python
-# code/test_recwarn.py
-def test_warning(recwarn):
-    warnings.warn("This is a warning")
-    assert len(recwarn) == 1
-    assert recwarn[0].message.args[0] == "This is a warning"
-
-    warning.warn("This is another warning", FutureWarning)
-    assert len(recwarn) == 2
-    assert recwarn[1].category == FutureWarning
-#+end_src
 ** Temporary files: ~tmp_path~
 When working with temporary files, it is best to use the [[https://docs.pytest.org/en/latest/how-to/tmp_path.html#tmp-path][tmp_path]] fixture. This fixture creates a temporary directory and returns a ~pathlib.Path~ object pointing to it. The temporary directory is automatically cleaned up when the test finishes, only leaving the last 3 temporary directories in case you want to inspect them.
 #+begin_src python
@@ -302,8 +291,8 @@ class TestTmpPath:
         assert (model_dir / "config.json").is_file()
         assert (model_dir / "model.safetensors").is_file()
 #+end_src
-* Testing for exceptions
-** ~pytest.raises~
+* Testing for exceptions and warnings
+** Exceptions: ~pytest.raises~
 In ~unittest~, you can use the ~assertRaises~ context manager to test if a function raises an exception. In ~pytest~, use [[https://docs.pytest.org/en/8.0.x/reference/reference.html#pytest-raises][pytest.raises]] instead to achieve the same outcome.
 #+begin_src python
 # code/test_raises.py
@@ -321,6 +310,24 @@ def test_with_message():
         check_value(5)  # raises
 #+end_src
 *Tip*: The ~match~ argument is a regular expression that is matched against the exception message. The test passes only if the message matches. In most circumstances, you should use ~match~ to ensure that the correct exception is raised, otherwise, an unrelated exception that happens to have the same type will also lead to a passing test.
+** Warnings: ~pytest.warns~
+To test if a function emits a warning, use the [[https://docs.pytest.org/en/8.0.x/how-to/capture-warnings.html#warns][pytest.warns]] context manager. This basically works the same as ~pytest.raises~ but instead of passing an exception type, you pass a warning type. The ~match~ argument also works the same as with ~pytest.raises~.
+#+begin_src python
+# code/test_warns.py
+def test_warning():
+    def warn():
+        warnings.warn("This is a warning")
+
+    with pytest.warns(UserWarning):
+        warn()
+
+    def another_warn():
+        warnings.warn("This is another warning", FutureWarning)
+
+    with pytest.warns(FutureWarning, match="This is another warning"):
+        another_warn()
+#+end_src
+If you want to check that multiple warnings are emitted, you can use the [[https://docs.pytest.org/en/latest/reference/reference.html#std-fixture-recwarn][recwarn]] fixture instead.
 * Parametrization
 ** Introduction
 The concept of [[https://docs.pytest.org/en/latest/how-to/parametrize.html][parametrization]] is useful when you want to run the same test with different inputs. This is an excellent way to avoid code duplication and to ensure that the same test is run with different inputs.
