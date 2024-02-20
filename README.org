@@ -575,13 +575,156 @@ This is just a small cosmetic addition, but by installing [[https://pypi.org/pro
 #+end_src
 ** Running tests in parallel
 When you have a large test suite, it can be useful to run the tests in parallel to speed up the test run. This requires the [[https://pypi.org/project/pytest-xdist/][pytest-xdist]] plugin. To install it, run ~pip install pytest-xdist~. Then, you can run ~pytest code/ -n <N>~, where ~N~ is the number of workers. This will run the tests in ~N~ parallel processes.
-* PyTorch
-/special considerations for PyTorch/
+* Special considerations for PyTorch and Hugging Face
+** Checking the equality of PyTorch tensors
+PyTorch has a dedicated [[https://pytorch.org/docs/stable/testing.html#module-torch.testing][testing module]]. The notable function in this module is ~torch.testing.assert_close~. This function checks for approximate equality, which is important for floating point numbers. Moreover, it will report back the magnitude of the error in case the test fails. Here is an example:
+
+#+begin_src python
+# code/test_pytorch.py
+def test_forward():
+    model = torch.nn.Linear(3, 5)
+    x = torch.randn(10, 3)
+    y = model(x)
+    expected = torch.randn(10, 5)
+    torch.testing.assert_allclose(y, expected)
+#+end_src
+
+Moreover, it also checks other things, like the device and the dtype of the tensors:
+
+#+begin_src python
+# code/test_pytorch.py
+def test_other_device():
+    x = torch.zeros(10, 3)
+    y = torch.zeros(10, 3).to("cuda")
+    torch.testing.assert_allclose(x, y)
+#+end_src
+
+Finally, when testing PyTorch, it is important that the random seed is set to a fixed value. This can be achieved by adding the following fixture to your test file:
+
+#+begin_src python
+@pytest.fixture(autouse=True)
+def set_random_seed():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+@pytest.mark.usefixtures("set_random_seed")
+def test_rand():
+    x = torch.rand(2, 2)
+    expected = torch.tensor([[0.4963, 0.7682], [0.0885, 0.1320]])
+    torch.testing.assert_allclose(x, expected, rtol=1e-4, atol=1e-4)
+#+end_src
+
+** Checking the same pretrained models repeatedly
+In Hugging Face tests, it is very common to perform different tests on the same pretrained model. This often results in the model being loaded multiple times, which is slow, even if the weights are cached on disk. To avoid this, use a fixture with a scope of ~"session"~. This fixture can be defined in ~conftest.py~ and then will be available automatically in all test files. Here is an example:
+
+#+begin_src python
+# code/conftest.py
+import pytest
+
+@pytest.fixture(scope="session")
+def bloomz_model():
+    return AutoModelForCausalLM.from_pretrained("bigscience/bloomz-560m")
+
+# code/test_hf.py
+def test_forward(bloomz_model):
+    x = torch.zeros(1, 10, dtype=torch.long)
+    bloomz_model(x)
+#+end_src
+
+Be careful, however, not to mutate the model in any of the tests, as this will affect other tests that use the model fixture. For instance, if you train the model, all subsequent tests that use the model fixture will use the trained model. If you write a test that mutates the model, don't use the global fixture but load a separate model instead, or create a copy of the model.
+
+Also, be aware that if the fixture is session scoped, it will be held in memory for the entire test run. Therefore, use this approach only for small models.
+** Freeing up memory
+When working with large models, it is important to free up memory after the test is done. To achieve this, use ~yield~ in the fixture, as explained earlier:
+
+#+begin_src python
+# code/test_hf.py
+@pytest.fixture
+def big_model():
+    # This model is loaded into memory and then deleted again for each test that
+    # uses this fixture
+    model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
+    print("Loaded model into memory")
+    yield model
+    # clean up after the fixture
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("Deleted model from memory")
+
+def test_opt_forward(big_model):
+    x = torch.zeros(1, 10, dtype=torch.long)
+    big_model(x)
+
+def test_opt_generate(big_model):
+    big_model.generate(
+        torch.zeros(1, 10, dtype=torch.long),
+        do_sample=True,
+        max_length=20,
+        num_return_sequences=1,
+    )
+#+end_src
 * Recommended practices
-** Group tests in classes
-** Documentation
+** Group related tests into classes
+Although ~pytest~ does not require to use classes, as it supports tests as standalone functions, it can still often be a good idea to group related tests into classes. A couple of advantages of this approach are:
+
+- It creates a namespace. For example, you could have a fixture called ~model~ in one test class that loads GPT2 and another fixture called ~model~ in another test class that loads T5. If the fixtures were defined on the module level, they would have to have different names. This can quickly become unwieldy as the number of fixtures grows.
+- It allows you to decorate the whole class. For example, if all tests in that class require a GPU, you can add the ~@pytest.mark.skipif~ decorator to the class and all its tests will be skipped. If the tests were defined on the module level, you would have to decorate each single test.
+- Often, when working on a new feature or bugfix, you'll want to run only the tests related to that feature or bugfix. By grouping related tests into classes, you can use the ~pytest tests/ -k <NAME-OF-CLASS>~ to run exactly those tests in this class. In theory, you might be able to achieve the same by clever use of logic for the ~-k~ option, but this can get complicated quickly. You could also use markers, but unless you plan to run these tests very often, it's overkill.
+- Finally, when migrating from ~unittest~ to ~pytest~, it is often easier to keep the same structure. This makes the migration less error-prone and easier to review as it reduces diff noise.
+
+Of course, there are also advantages for using standalone functions. For example, if the class would have only a single associated test method, using a class is unnecessary. Functions are easier to write and require one less level of indentation. Therefore, it is important to find a good balance between the two.
+** Document tests
+/This section is not specific to ~pytest~/
+
+At the time when we write tests, it is often clear to use what the test is supposed to do. But as with regular code, other contributors might not understand what the test does in detail, or we ourselves might forget the purpose of the test after some time. Therefore, it is important to document the tests when they are non-trivial.
+
+As an example, consider referencing the GitHub issue when a test exists to verify a bugfix. Although this information could also be discovered by looking at the git history, spelling it out saves time. Also, take the time to explain what tests do if the test checks for something that is not obvious. Good naming can also help here: Since test functions are not called directly, it is often better to have a long descriptive name than a short and concise one.
+
+Another thing to consider is to explain "magic numbers". For example, if the test asserts that a certain output should be ~42~, explain where that number comes from.
 ** Test only one thing at a time
+Our tests will often test multiple things at once. For example, here is a test from the PEFT code base:
+#+begin_src python
+# https://github.com/huggingface/peft/blob/f81147268efb368d2bd0dc280fd651b8107aff3a/tests/test_common_gpu.py#L442
+    def test_lora_seq2seq_lm_multi_gpu_inference(self):
+        lora_config = LoraConfig(
+            r=16, lora_alpha=32, target_modules=["q", "v"], lora_dropout=0.05, bias="none", task_type="SEQ_2_SEQ_LM"
+        )
+
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.seq2seq_model_id, device_map="balanced", load_in_8bit=True)
+        tokenizer = AutoTokenizer.from_pretrained(self.seq2seq_model_id)
+
+        assert set(model.hf_device_map.values()) == set(range(torch.cuda.device_count()))
+
+        model = get_peft_model(model, lora_config)
+        assert isinstance(model, PeftModel)
+        assert isinstance(model.base_model.model.encoder.block[0].layer[0].SelfAttention.q, LoraLinear8bitLt)
+
+        dummy_input = "This is a dummy input:"
+        input_ids = tokenizer(dummy_input, return_tensors="pt").input_ids.to(self.device)
+
+        # this should work without any problem
+        _ = model.generate(input_ids=input_ids)
+#+end_src
+Notice how the test checks the ~device_map~, the model type, the layer type, and that generation works. This is not ideal, as it makes it harder to understand the purpose of the test. Moreover, if the first assertion fails, the other assertions will not even run. This makes it harder to figure out what exactly went wrong when we see that this test fails on CI, and may require us to comment out the failing assertion to check what happens next.
+
+One of the reasons why the test was written like this is probably that splitting it into separate tests would be slow, as the model would have to be loaded multiple times. However, as we have seen in the previous section on fixtures, this can be easily avoided by using appropriately named fixtures.
+** A real world example of improving a test by using ~pytest~ features
+TODO
 ** What to test -- and what not to test
+/This section is not specific to ~pytest~/
+
+Many words have been written on this topic, we cannot cover all of that here. However, based on some tests found in the wild, here are some tips:
+
+- Ensure that all the edge cases are covered. This includes running the test on different devices, if applicable, or with different types of models. With ~pytest~, this can often be achieved without too much extra work by using ~@pytest.mark.parametrize~. However, don't forget to also test the happy path, which often involves using the default values for the parameters.
+- Test the error handling. This is often forgotten, but it is important to test that the function or class raises the correct error (including error message) in the right circumstances.
+- Test the behavior and not implementation details. Put yourself in the shoes of a user and think about how they might use a particular function or class. There is no point in testing that, say, certain private attributes are set correctly, as this is an implementation detail that is prone to change anyway. Ideally, if the implementation changes, the tests should not have to change. If you find that changing the implementation requires changing the tests, either the tests are testing the wrong thing or you're actually breaking backwards compatibility.
 ** Tips for speeding up the tests
 - Use appropriately scoped fixtures to avoid code duplication
 - Avoid expensive operations in the module root code, like importing slow libraries that are only used by a few tests. Instead, put them inside of fixtures. That way, they are only imported when the fixture is actually used.
+** Have fun writing tests
+One of the reasons we skip writing tests is often that it's just not that much fun. This can often lead to more work down the line because we're missing bugs or because a feature is incomplete. Here are some tips to make testing more fun:
+
+- Tests should run quickly. If you have to wait a long time for them to finish, you're probably not going to run them and will be reluctant to add more. With the tips in this guide, especially the section on fixtures, you can often speed up the tests significantly. Using clever command line invocations (or editor settings), you can also ensure that only the necessary tests run. Don't rely solely on CI for running tests if possible.
+- Write the tests first. This is often called "test-driven development" and is a good way to ensure good test coverage. You can dedicate time to thinking just about what the tests should cover. And since you'll get quick feedback on whether the tests pass, you'll be more motivated to write them, chasing the oh so desirable ✅.
+- Have a hacker mindset. Writing tests is a bit like hacking. You're trying to break your own code. Find all the creative ways in which your code can fail and write tests for them.
